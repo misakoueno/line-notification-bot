@@ -1,5 +1,49 @@
 import os
 import datetime
+
+garbage_schedule = {
+    "若田町": {
+        "燃やせるごみ": ["月曜日", "木曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "金曜日", "occurrences": [2, 4]},
+        "地区": "八幡"
+    },
+    "若松町（1）､（2）､（3）､（4）､（坂下）": {
+        "燃やせるごみ": ["月曜日", "木曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "水曜日", "occurrences": [1, 3]},
+        "地区": "南"
+    },
+    "我峰町": {
+        "燃やせるごみ": ["火曜日", "金曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "木曜日", "occurrences": [2, 4]},
+        "地区": "長野"
+    },
+    "和田町（1）､（2）､（3）": {
+        "燃やせるごみ": ["月曜日", "木曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "水曜日", "occurrences": [1, 3]},
+        "地区": "南"
+    },
+    "和田多中町（住居表示1番から4番）": {
+        "燃やせるごみ": ["火曜日", "金曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "水曜日", "occurrences": [2, 4]},
+        "地区": "城南"
+    },
+    "和田多中町（上記以外の地域）": {
+        "燃やせるごみ": ["火曜日", "金曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "火曜日", "occurrences": [1, 3]},
+        "地区": "佐野"
+    },
+    "綿貫町": {
+        "燃やせるごみ": ["月曜日", "木曜日"],
+        "燃やせないごみ（資源物）": {"type": "第n曜日", "day_of_week": "金曜日", "occurrences": [2, 4]},
+        "地区": "岩鼻"
+    }
+}
+
+# 曜日を数値に変換するためのヘルパー（月曜日が0）
+day_mapping = {
+    "月曜日": 0, "火曜日": 1, "水曜日": 2, "木曜日": 3, "金曜日": 4, "土曜日": 5, "日曜日": 6
+}
+
 import requests
 import json
 
@@ -66,17 +110,40 @@ def main():
 
     messages_to_send = []
     day_name_tomorrow = ["月", "火", "水", "木", "金", "土", "日"][tomorrow_jst.weekday()]
-    
-    # 翌日が火曜日かチェック
-    if tomorrow_jst.weekday() == 1: # 0:月, 1:火, ...
-        messages_to_send.append(f"明日は「燃えるゴミ」の日です。({tomorrow_jst.strftime('%Y-%m-%d')} {day_name_tomorrow}曜日)")
 
-        # 第何火曜日かを判定
-        occurrence = get_day_of_week_occurrence(tomorrow_jst)
-        print(f"明日は第{occurrence}火曜日です。")
-        
-        if occurrence == 1 or occurrence == 3:
-            messages_to_send.append("明日は「燃えないゴミ」も出せます。")
+    # 環境変数からユーザーの町名を取得
+    user_town_name = os.environ.get("USER_TOWN_NAME")
+    if not user_town_name:
+        print("致命的エラー: 環境変数 USER_TOWN_NAME が設定されていません。プログラムを終了します。")
+        print("GitHub Actionsのワークフローファイル (.github/workflows/line_notify.yml) の env セクションで USER_TOWN_NAME を設定してください。")
+        exit(1)
+
+    if user_town_name not in garbage_schedule:
+        print(f"致命的エラー: 設定された町名「{user_town_name}」の収集スケジュールが見つかりません。")
+        print(f"利用可能な町名: {', '.join(garbage_schedule.keys())}")
+        print("USER_TOWN_NAME の設定を確認するか、garbage_scheduleに情報を追加してください。")
+        exit(1)
+
+    schedule_for_town = garbage_schedule[user_town_name]
+    print(f"町名「{user_town_name}」のスケジュールで通知を確認します。")
+
+    # 燃やせるゴミのチェック
+    if "燃やせるごみ" in schedule_for_town:
+        for day_str in schedule_for_town["燃やせるごみ"]:
+            if day_mapping.get(day_str) == tomorrow_jst.weekday():
+                messages_to_send.append(f"明日は「燃やせるごみ」の日です。({tomorrow_jst.strftime('%Y-%m-%d')} {day_name_tomorrow}曜日)")
+                break 
+
+    # 燃やせないごみ（資源物）のチェック
+    if "燃やせないごみ（資源物）" in schedule_for_town:
+        non_burnable_schedule = schedule_for_town["燃やせないごみ（資源物）"]
+        if non_burnable_schedule.get("type") == "第n曜日":
+            target_day_of_week_num = day_mapping.get(non_burnable_schedule.get("day_of_week"))
+            if target_day_of_week_num is not None and target_day_of_week_num == tomorrow_jst.weekday():
+                occurrence = get_day_of_week_occurrence(tomorrow_jst) 
+                if occurrence in non_burnable_schedule.get("occurrences", []):
+                    messages_to_send.append(f"明日は「燃やせないごみ（資源物）」の日です。(第{occurrence}{day_name_tomorrow}曜日)")
+
 
     if messages_to_send:
         full_message = "\n".join(messages_to_send)

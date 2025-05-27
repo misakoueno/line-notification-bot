@@ -13,6 +13,7 @@ jobs:
       LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
       LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
       TZ: 'Asia/Tokyo' # タイムゾーンを日本時間に設定
+      USER_TOWN_NAME: '和田多中町（上記以外の地域）'
 
     steps:
     - name: Checkout repository
